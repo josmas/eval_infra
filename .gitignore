@@ -1,0 +1,19 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+
+# Editors
+.vscode/
+.idea/
+*.swp

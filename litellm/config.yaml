@@ -1,0 +1,42 @@
+# LiteLLM proxy config.
+# Reference: https://docs.litellm.ai/docs/proxy/configs
+#
+# model_name is the alias clients ask for; litellm_params.model is the
+# actual provider/model litellm routes to.
+
+model_list:
+  # --- local models, served by Ollama on the host ---
+  - model_name: local-llama3.1
+    litellm_params:
+      model: ollama/llama3.1
+      api_base: http://host.docker.internal:11434
+
+  # --- cloud models ---
+  - model_name: gpt-4o-mini
+    litellm_params:
+      model: gpt-4o-mini
+      api_key: os.environ/OPENAI_API_KEY
+
+  - model_name: claude-3-5-sonnet
+    litellm_params:
+      model: anthropic/claude-3-5-sonnet-20241022
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+litellm_settings:
+  # Sends every request's trace to Langfuse. Needs LANGFUSE_PUBLIC_KEY,
+  # LANGFUSE_SECRET_KEY, LANGFUSE_HOST in the environment (see .env.example).
+  success_callback: ["langfuse"]
+  failure_callback: ["langfuse"]
+
+router_settings:
+  # Example: if the cloud model fails (rate limit, outage, bad key), fall
+  # back to the local model. Add more entries / reverse the direction as
+  # needed once you know your actual reliability requirements.
+  fallbacks: [{ "gpt-4o-mini": ["local-llama3.1"] }]
+
+general_settings:
+  # Used only to mint/manage virtual keys via the /key/generate endpoint.
+  # Never hand this key to a consumer (dashboard, plugin-backend, etc.) —
+  # they each get their own scoped virtual key instead.
+  master_key: os.environ/LITELLM_MASTER_KEY
+  salt_key: os.environ/LITELLM_SALT_KEY

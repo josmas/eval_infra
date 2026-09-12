@@ -1,0 +1,15 @@
+{
+  "name": "blockly-plugin-backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Backend for the Blockly plugin: authenticates plugin requests and forwards them to the LiteLLM proxy. Pure passthrough - no other responsibilities.",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "fastify": "^5.2.0"
+  }
+}
