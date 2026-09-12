@@ -4,9 +4,15 @@ Local dev stack giving model access (local + cloud) with routing/fallbacks,
 per-consumer credentials, and full tracing.
 
 - **LiteLLM proxy** — model access, routing, fallbacks, credentials, quotas,
-  provider abstraction over local models and cloud providers.
+  provider abstraction over local models and cloud providers. Has its own
+  Postgres (`litellm-db`) to support virtual keys/budgets via `/key/generate`.
 - **Langfuse (self-hosted)** — traces, debugging, evals, cost/quality
-  analysis. Wired up automatically via LiteLLM's built-in callback.
+  analysis. Wired up automatically via LiteLLM's built-in callback. Runs v4,
+  with `LANGFUSE_MIGRATION_V4_WRITE_MODE=dual` set so it still accepts the
+  legacy ingestion protocol LiteLLM's callback uses (v4 defaults to rejecting
+  it silently otherwise — if traces ever stop showing up with no error on the
+  LiteLLM side, check `docker compose logs langfuse-web` for a "Rejected N
+  event(s)... events_only mode" warning).
 - **Ollama and/or LM Studio** — serve local models. Both are supported side
   by side (`local-ollama` / `local-lmstudio` in `litellm/config.yaml`); use
   either or both. Both run natively on the host (not in Docker), so they
@@ -72,7 +78,12 @@ the stack up in two passes:
    step 2. Everything else starts fine.
 
 2. **Mint the two LiteLLM virtual keys**, authenticating with
-   `LITELLM_MASTER_KEY`:
+   `LITELLM_MASTER_KEY`. Load `.env` into your shell first so `$LITELLM_MASTER_KEY`
+   below actually resolves to something:
+
+   ```bash
+   set -a && source .env && set +a
+   ```
 
    ```bash
    # For the dashboard's own backend - hand this key off to it, don't store
@@ -125,9 +136,15 @@ curl -i http://localhost:5050/v1/chat/completions \
   -d '{"model": "local-ollama", "messages": [{"role": "user", "content": "hi"}]}'
 ```
 
-Then open `http://localhost:3000` (Langfuse UI) and confirm all the above
-requests show up as traces, distinguishable by which virtual key made the
-call.
+Then open `http://localhost:3000` (Langfuse UI, log in with
+`LANGFUSE_INIT_USER_EMAIL`/`LANGFUSE_INIT_USER_PASSWORD`) and confirm all the
+above requests show up as traces, distinguishable by which virtual key made
+the call.
+
+You can also open `http://localhost:4000/ui` (LiteLLM's own admin UI — key
+management, spend, request logs). Log in with username `admin` and
+`LITELLM_MASTER_KEY` as the password — that's LiteLLM's default when no
+separate `UI_USERNAME`/`UI_PASSWORD` is configured.
 
 To sanity-check the configured fallback (`gpt-4o-mini` → `local-lmstudio` →
 `local-ollama` in `litellm/config.yaml`), temporarily set `OPENAI_API_KEY` to
@@ -138,5 +155,17 @@ should show the fallback.
 ## Adding vLLM or another local model
 
 Add another entry to `model_list` in `litellm/config.yaml` pointing at its
-OpenAI-compatible endpoint (same pattern as the Ollama/LM Studio entries) —
-no other changes needed.
+OpenAI-compatible endpoint (same pattern as the Ollama/LM Studio entries), then
+`docker compose restart litellm`. Compose won't pick up a bind-mounted file's
+changed *contents* on its own — `docker compose up -d` only recreates a
+container when the container's own definition (image/env/etc.) changes, not
+when a file it mounts does — so any edit to `config.yaml` needs an explicit
+restart of the `litellm` service to take effect.
+
+## Tearing down
+
+`docker compose down` stops and removes the containers/network but **keeps**
+all named volumes (Langfuse's Postgres/ClickHouse/MinIO data, LiteLLM's
+virtual keys, etc.) — everything picks up where it left off on the next
+`docker compose up -d`. To wipe all of that too and start completely fresh:
+`docker compose down -v`.
