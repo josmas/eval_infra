@@ -1,14 +1,16 @@
-# Eval infra: LiteLLM + Langfuse + Ollama
+# Eval infra: LiteLLM + Langfuse + Ollama/LM Studio
 
 Local dev stack giving model access (local + cloud) with routing/fallbacks,
 per-consumer credentials, and full tracing.
 
 - **LiteLLM proxy** — model access, routing, fallbacks, credentials, quotas,
-  provider abstraction over Ollama and cloud providers.
+  provider abstraction over local models and cloud providers.
 - **Langfuse (self-hosted)** — traces, debugging, evals, cost/quality
   analysis. Wired up automatically via LiteLLM's built-in callback.
-- **Ollama** — serves local models. Runs natively on the host (not in
-  Docker), so it keeps GPU/Metal access.
+- **Ollama and/or LM Studio** — serve local models. Both are supported side
+  by side (`local-ollama` / `local-lmstudio` in `litellm/config.yaml`); use
+  either or both. Both run natively on the host (not in Docker), so they
+  keep GPU/Metal access.
 - **plugin-backend** — a minimal Fastify app that exists *only* because the
   Blockly plugin has no backend of its own and can't safely hold a LiteLLM
   key. It authenticates plugin requests with a static key and forwards to
@@ -21,8 +23,18 @@ backend, so it gets its own LiteLLM virtual key and calls LiteLLM directly.
 ## Prerequisites
 
 - Docker + Docker Compose
-- [Ollama](https://ollama.com) installed and running on the host
-  (`ollama pull llama3.1`, or swap the model in `litellm/config.yaml`)
+- Either or both, running on the host:
+  - [Ollama](https://ollama.com) with a model pulled (`ollama pull llama3.1`,
+    or swap the model in the `local-ollama` entry in `litellm/config.yaml`)
+  - [LM Studio](https://lmstudio.ai) with a model downloaded and the local
+    server started (Developer tab → Start Server — defaults to port 1234).
+    Note the model's identifier (shown in the app, or via
+    `curl http://localhost:1234/v1/models`) and put it in
+    `litellm/config.yaml` in place of `<your-lm-studio-model-name>` in the
+    `local-lmstudio` entry.
+  - If you're only using one of the two, delete the other's `model_list`
+    entry in `litellm/config.yaml` (and its mention in `fallbacks`) so
+    LiteLLM doesn't try to reach a server that isn't running.
 
 ## Setup
 
@@ -93,7 +105,7 @@ the stack up in two passes:
 curl http://localhost:4000/v1/chat/completions \
   -H "Authorization: Bearer <dashboard virtual key>" \
   -H "Content-Type: application/json" \
-  -d '{"model": "local-llama3.1", "messages": [{"role": "user", "content": "hi"}]}'
+  -d '{"model": "local-ollama", "messages": [{"role": "user", "content": "hi"}]}'
 
 curl http://localhost:4000/v1/chat/completions \
   -H "Authorization: Bearer <dashboard virtual key>" \
@@ -104,26 +116,26 @@ curl http://localhost:4000/v1/chat/completions \
 curl http://localhost:5000/v1/chat/completions \
   -H "Authorization: Bearer <one of PLUGIN_API_KEYS>" \
   -H "Content-Type: application/json" \
-  -d '{"model": "local-llama3.1", "messages": [{"role": "user", "content": "hi"}]}'
+  -d '{"model": "local-ollama", "messages": [{"role": "user", "content": "hi"}]}'
 
 # Bad/missing plugin key should be rejected before ever reaching LiteLLM
 curl -i http://localhost:5000/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -d '{"model": "local-llama3.1", "messages": [{"role": "user", "content": "hi"}]}'
+  -d '{"model": "local-ollama", "messages": [{"role": "user", "content": "hi"}]}'
 ```
 
 Then open `http://localhost:3000` (Langfuse UI) and confirm all the above
 requests show up as traces, distinguishable by which virtual key made the
 call.
 
-To sanity-check the configured fallback (`gpt-4o-mini` → `local-llama3.1` in
-`litellm/config.yaml`), temporarily set `OPENAI_API_KEY` to something invalid,
-restart `litellm`, and re-run the `gpt-4o-mini` request above — it should
-still succeed via the local model, and the trace in Langfuse should show the
-fallback.
+To sanity-check the configured fallback (`gpt-4o-mini` → `local-lmstudio` →
+`local-ollama` in `litellm/config.yaml`), temporarily set `OPENAI_API_KEY` to
+something invalid, restart `litellm`, and re-run the `gpt-4o-mini` request
+above — it should still succeed via a local model, and the trace in Langfuse
+should show the fallback.
 
 ## Adding vLLM or another local model
 
 Add another entry to `model_list` in `litellm/config.yaml` pointing at its
-OpenAI-compatible endpoint (same pattern as the Ollama entry) — no other
-changes needed.
+OpenAI-compatible endpoint (same pattern as the Ollama/LM Studio entries) —
+no other changes needed.

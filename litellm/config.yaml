@@ -5,11 +5,23 @@
 # actual provider/model litellm routes to.
 
 model_list:
-  # --- local models, served by Ollama on the host ---
-  - model_name: local-llama3.1
+  # --- local models, served on the host (either or both can be used) ---
+
+  # Ollama - defaults to port 11434.
+  - model_name: local-ollama
     litellm_params:
       model: ollama/llama3.1
       api_base: http://host.docker.internal:11434
+
+  # LM Studio - defaults to port 1234 with an OpenAI-compatible /v1 API.
+  # Replace <your-lm-studio-model-name> with the identifier LM Studio shows
+  # for your loaded model (also visible via
+  # `curl http://localhost:1234/v1/models`).
+  - model_name: local-lmstudio
+    litellm_params:
+      model: lm_studio/<your-lm-studio-model-name>
+      api_base: http://host.docker.internal:1234/v1
+      api_key: lm-studio # LM Studio doesn't check this, but litellm needs a non-empty value
 
   # --- cloud models ---
   - model_name: gpt-4o-mini
@@ -32,7 +44,7 @@ router_settings:
   # Example: if the cloud model fails (rate limit, outage, bad key), fall
   # back to the local model. Add more entries / reverse the direction as
   # needed once you know your actual reliability requirements.
-  fallbacks: [{ "gpt-4o-mini": ["local-llama3.1"] }]
+  fallbacks: [{ "gpt-4o-mini": ["local-lmstudio", "local-ollama"] }]
 
 general_settings:
   # Used only to mint/manage virtual keys via the /key/generate endpoint.
