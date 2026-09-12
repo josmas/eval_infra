@@ -164,12 +164,33 @@ services:
     volumes:
       - langfuse_postgres_data:/var/lib/postgresql/data
 
+  # LiteLLM's own database for virtual keys/budgets (/key/generate etc.) -
+  # separate from Langfuse's postgres above, kept as its own service so the
+  # Langfuse block stays an untouched copy of the upstream compose file.
+  litellm-db:
+    image: docker.io/postgres:17
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U litellm"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    environment:
+      POSTGRES_USER: litellm
+      POSTGRES_PASSWORD: litellm # dev-only, only reachable inside the compose network
+      POSTGRES_DB: litellm
+    volumes:
+      - litellm_postgres_data:/var/lib/postgresql/data
+
   # --- LiteLLM: model gateway (routing/fallbacks/credentials/quotas) ---
   litellm:
     image: docker.litellm.ai/berriai/litellm:latest
     restart: always
     depends_on:
-      - langfuse-web
+      langfuse-web:
+        condition: service_started
+      litellm-db:
+        condition: service_healthy
     ports:
       - 127.0.0.1:4000:4000
     extra_hosts:
@@ -179,8 +200,9 @@ services:
       - ./litellm/config.yaml:/app/config.yaml:ro
     command: ["--config", "/app/config.yaml"]
     environment:
-      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?set a real value in .env}
-      LITELLM_SALT_KEY: ${LITELLM_SALT_KEY:?set a real value in .env}
+      DATABASE_URL: postgresql://litellm:litellm@litellm-db:5432/litellm
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-}
+      LITELLM_SALT_KEY: ${LITELLM_SALT_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_INIT_PROJECT_PUBLIC_KEY:-}
@@ -197,15 +219,19 @@ services:
     depends_on:
       - litellm
     ports:
-      - 127.0.0.1:5000:5000
+      # host port 5050, not 5000 - macOS's AirPlay Receiver/ControlCenter
+      # squats on 5000 system-wide and silently intercepts requests to it.
+      - 127.0.0.1:5050:5000
     environment:
       PORT: 5000
       LITELLM_BASE_URL: http://litellm:4000
-      LITELLM_VIRTUAL_KEY: ${PLUGIN_LITELLM_VIRTUAL_KEY:?set a real value in .env (minted via /key/generate, see README)}
-      PLUGIN_API_KEYS: ${PLUGIN_API_KEYS:?set a comma-separated list in .env}
+      LITELLM_VIRTUAL_KEY: ${PLUGIN_LITELLM_VIRTUAL_KEY:-}
+      PLUGIN_API_KEYS: ${PLUGIN_API_KEYS:-}
 
 volumes:
   langfuse_postgres_data:
+    driver: local
+  litellm_postgres_data:
     driver: local
   langfuse_clickhouse_data:
     driver: local

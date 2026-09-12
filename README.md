@@ -67,8 +67,9 @@ the stack up in two passes:
 
    Langfuse auto-provisions the org/project/user and fixed API keys from the
    `LANGFUSE_INIT_*` vars in `.env` on first boot — no manual UI step needed.
-   `plugin-backend` will fail to start yet (no virtual key set) — that's
-   expected, continue to step 2.
+   `plugin-backend` will crash-loop until its virtual key is set (it checks
+   for it on startup and logs a clear error) — that's expected, continue to
+   step 2. Everything else starts fine.
 
 2. **Mint the two LiteLLM virtual keys**, authenticating with
    `LITELLM_MASTER_KEY`:
@@ -113,13 +114,13 @@ curl http://localhost:4000/v1/chat/completions \
   -d '{"model": "gpt-4o-mini", "messages": [{"role": "user", "content": "hi"}]}'
 
 # Blockly plugin path: through plugin-backend, plugin never sees a LiteLLM key
-curl http://localhost:5000/v1/chat/completions \
+curl http://localhost:5050/v1/chat/completions \
   -H "Authorization: Bearer <one of PLUGIN_API_KEYS>" \
   -H "Content-Type: application/json" \
   -d '{"model": "local-ollama", "messages": [{"role": "user", "content": "hi"}]}'
 
 # Bad/missing plugin key should be rejected before ever reaching LiteLLM
-curl -i http://localhost:5000/v1/chat/completions \
+curl -i http://localhost:5050/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{"model": "local-ollama", "messages": [{"role": "user", "content": "hi"}]}'
 ```
