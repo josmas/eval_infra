@@ -56,6 +56,20 @@ Fill in `.env`:
   `LANGFUSE_S3_*_SECRET_ACCESS_KEY` vars.
 - Add `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` for whichever cloud providers
   you want reachable (leave others blank).
+- For AWS Bedrock (`bedrock-claude` in `litellm/config.yaml`): set
+  `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_REGION_NAME`. This
+  needs a **long-lived IAM access key** (an IAM user with Bedrock invoke
+  permissions) — an AWS CLI profile using SSO doesn't have one to copy out,
+  only short-lived cached tokens, so that path isn't supported here without
+  extra work (mounting `~/.aws` into the `litellm` container). Also note
+  Bedrock models need **model access granted per-region** in the AWS Bedrock
+  console before they can be invoked, separately from IAM permissions.
+  Unlike every other secret in this file, a real AWS access key is a live
+  credential against your actual AWS account, not a local-only dev value —
+  `.env` is gitignored so it won't get committed, but scope the IAM
+  user/policy to the minimum needed (Bedrock invoke only, ideally restricted
+  to the specific model(s) and region you're using) rather than something
+  broader, since it's sitting unencrypted on disk here.
 - Pick any string for `PLUGIN_API_KEYS` (comma-separated if more than one
   install) — this is the key the Blockly plugin itself will send.
 - Leave `PLUGIN_LITELLM_VIRTUAL_KEY` blank for now — see step 3 below.

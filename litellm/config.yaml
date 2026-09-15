@@ -34,6 +34,14 @@ model_list:
       model: anthropic/claude-3-5-sonnet-20241022
       api_key: os.environ/ANTHROPIC_API_KEY
 
+  # AWS Bedrock - long-lived IAM access key.
+  - model_name: bedrock-claude
+    litellm_params:
+      model: bedrock/anthropic.claude-haiku-4-5-20251001-v1:0
+      aws_access_key_id: os.environ/AWS_ACCESS_KEY_ID
+      aws_secret_access_key: os.environ/AWS_SECRET_ACCESS_KEY
+      aws_region_name: os.environ/AWS_REGION_NAME
+
 litellm_settings:
   # Sends every request's trace to Langfuse. Needs LANGFUSE_PUBLIC_KEY,
   # LANGFUSE_SECRET_KEY, LANGFUSE_HOST in the environment (see .env.example).
